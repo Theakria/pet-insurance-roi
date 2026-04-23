@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>宠物险挽留ROI测算工具</title>
+<title>宠物险投放ROI测算工具</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -159,6 +159,27 @@ body {
 
 .detail-wrap { margin-top: 12px; max-height: 400px; overflow-y: auto; }
 
+/* Confirm button */
+.confirm-btn {
+  width: 100%; padding: 14px; border: none; border-radius: 10px; cursor: pointer;
+  background: linear-gradient(135deg, #1a73e8, #4fc3f7); color: #fff;
+  font-size: 16px; font-weight: 700; font-family: inherit; letter-spacing: 1px;
+  margin-bottom: 20px; transition: all 0.2s; box-shadow: 0 4px 16px #1a73e833;
+}
+.confirm-btn:hover { box-shadow: 0 6px 24px #1a73e855; transform: translateY(-1px); }
+.confirm-btn:active { transform: translateY(0); }
+.confirm-btn.changed {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 4px 16px #1a73e833; }
+  50% { box-shadow: 0 4px 24px #4fc3f788; }
+}
+
+/* Output area */
+.output-area { transition: opacity 0.3s; }
+.output-area.stale { opacity: 0.35; }
+
 /* Footer */
 .footer { text-align: center; font-size: 11px; color: #2a3a5c; padding: 12px 0 24px; }
 
@@ -176,9 +197,9 @@ body {
 <div class="container" id="app">
   <!-- Header -->
   <div class="header">
-    <div class="header-icon">🐾</div>
+    <div class="header-icon">📊</div>
     <div>
-      <h1>宠物险挽留ROI测算</h1>
+      <h1>宠物险投放ROI测算</h1>
       <p>3年用户全生命周期模型 · 实时计算</p>
     </div>
   </div>
@@ -199,16 +220,26 @@ body {
   <!-- Retention -->
   <div class="card">
     <div class="retention-header">
-      <div class="card-title" style="margin-bottom:0">存活率曲线</div>
-      <div class="btns">
-        <button class="small-btn" id="btnReset" onclick="resetRetention()">恢复默认</button>
-        <button class="small-btn" id="btnToggleRet" onclick="toggleRetention()">自定义</button>
-      </div>
+      <div class="card-title" style="margin-bottom:0">留存率曲线（M0-M35）</div>
+    </div>
+    <div style="font-size:12px;color:#6a8caa;margin-bottom:10px;line-height:1.6">
+      默认采用标准留存模型：转商50% → 逐月爬升至98% → 续保年首月衰减后恢复。
+      <span style="color:#4fc3f7;cursor:pointer;border-bottom:1px dashed #4fc3f7" onclick="if(!state.showRetention)toggleRetention()">点击下方按钮可自定义调整 ↓</span>
     </div>
     <div class="bar-chart" id="barChart"></div>
-    <div class="bar-labels"><span>M0</span><span>M11</span><span>M23</span><span>M35</span></div>
+    <div class="bar-labels" style="margin-bottom:10px"><span>M0 转商</span><span>M11 首年末</span><span>M23 次年末</span><span>M35 三年末</span></div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="small-btn" id="btnToggleRet" onclick="toggleRetention()" style="padding:8px 20px;font-size:12px;border-radius:8px">✏️ 自定义留存率</button>
+      <button class="small-btn" id="btnReset" onclick="resetRetention()" style="padding:8px 16px;font-size:12px;border-radius:8px">↺ 恢复默认</button>
+    </div>
     <div id="retentionEditor" style="display:none"></div>
   </div>
+
+  <!-- Confirm Button -->
+  <button class="confirm-btn" id="confirmBtn" onclick="confirmCalc()">确认计算</button>
+
+  <!-- Output Area -->
+  <div class="output-area" id="outputArea" style="display:none">
 
   <!-- ROI Gauges -->
   <div class="card">
@@ -221,7 +252,7 @@ body {
 
   <!-- Year Breakdown -->
   <div class="card">
-    <div class="card-title">年度汇总</div>
+    <div class="card-title">年度明细</div>
     <table class="data-table" id="yearTable"></table>
   </div>
 
@@ -229,16 +260,18 @@ body {
   <div class="card">
     <button class="collapse-btn" onclick="toggleMonthly()">
       <span class="card-title" style="margin-bottom:0">逐月明细（M0-M35）</span>
-      <span class="collapse-arrow" id="monthlyArrow">︾</span>
+      <span class="collapse-arrow" id="monthlyArrow">▾</span>
     </button>
     <div id="monthlyDetail" style="display:none"></div>
   </div>
 
-  <div class="footer">宠物险挽留ROI测算工具 · 基于3年用户全生命周期模型</div>
+  </div><!-- /outputArea -->
+
+  <div class="footer">宠物险投放ROI测算工具 · 基于3年用户全生命周期模型</div>
 </div>
 
 <script>
-// -- State --
+// ── State ──
 const DEFAULT_RETENTION = [
   0.50,0.80,0.85,0.88,0.90,0.92,0.95,0.95,0.95,0.95,0.98,0.98,
   0.78,0.90,0.95,0.98,0.98,0.98,0.98,0.98,0.98,0.98,0.98,0.98,
@@ -246,8 +279,8 @@ const DEFAULT_RETENTION = [
 ];
 
 const PHASES = [
-  { label:"转化首月 M0", range:[0,0], color:"#e74c3c" },
-  { label:"首年挣扎 M1-M5", range:[1,5], color:"#e67e22" },
+  { label:"转商首月 M0", range:[0,0], color:"#e74c3c" },
+  { label:"首年爬坡 M1-M5", range:[1,5], color:"#e67e22" },
   { label:"首年稳定 M6-M11", range:[6,11], color:"#f39c12" },
   { label:"续保Y1首月 M12", range:[12,12], color:"#27ae60" },
   { label:"续保Y1 M13-M23", range:[13,23], color:"#2ecc71" },
@@ -256,7 +289,7 @@ const PHASES = [
 ];
 
 const MONTH_LABELS = Array.from({length:36}, (_,i) => {
-  if(i===0) return "M0(转化)";
+  if(i===0) return "M0(转商)";
   if(i===11) return "M11(EOY1)";
   if(i===12) return "M12(续保Y1)";
   if(i===23) return "M23(EOY2)";
@@ -266,8 +299,8 @@ const MONTH_LABELS = Array.from({length:36}, (_,i) => {
 });
 
 const PRESETS = [
-  { label:"高级档 ¥78.9", premium:78.9, cost:140 },
-  { label:"基础档 ¥45.1", premium:45.1, cost:85 },
+  { label:"升级版 ¥78.9", premium:78.9, cost:140 },
+  { label:"基础版 ¥45.1", premium:45.1, cost:85 },
 ];
 
 let state = {
@@ -276,7 +309,7 @@ let state = {
   showRetention: false, showMonthly: false, editMode: "phase",
 };
 
-// -- Compute --
+// ── Compute ──
 function compute() {
   const { premium, acqCost, retention } = state;
   const conv = state.convRate / 100;
@@ -306,7 +339,7 @@ function compute() {
   };
 }
 
-// -- Helpers --
+// ── Helpers ──
 const pct = v => `${(v*100).toFixed(1)}%`;
 const yuan = v => `¥${v.toFixed(1)}`;
 function roiColor(v) {
@@ -317,18 +350,19 @@ function roiColor(v) {
 }
 function getPhase(i) { return PHASES.find(p => i >= p.range[0] && i <= p.range[1]); }
 
-// -- Render --
+// ── Render ──
 function render() {
-  const r = compute();
   renderPresets();
   renderParams();
-  renderCostRate(r);
   renderBarChart();
   renderRetentionEditor();
-  renderGauges(r);
-  renderMetrics(r);
-  renderYearTable(r);
-  if (state.showMonthly) renderMonthlyDetail(r);
+  // Cost rate display is in input area, update live
+  const r = compute();
+  renderCostRate(r);
+  // Output only renders on confirm
+  if (!state.dirty && document.getElementById("outputArea").style.display !== "none") {
+    renderOutput();
+  }
 }
 
 function renderPresets() {
@@ -339,14 +373,14 @@ function renderPresets() {
 }
 
 function applyPreset(prem, cost) {
-  state.premium = prem; state.acqCost = cost; render();
+  state.premium = prem; state.acqCost = cost; markStale(); render();
 }
 
 function renderParams() {
   const fields = [
-    { label:"月均保费", key:"premium", step:0.1, suffix:"元" },
+    { label:"单期保费", key:"premium", step:0.1, suffix:"元" },
     { label:"获客成本", key:"acqCost", step:5, suffix:"元" },
-    { label:"转化率", key:"convRate", step:1, suffix:"%" },
+    { label:"转商率", key:"convRate", step:1, suffix:"%" },
     { label:"赔付率", key:"lossRatio", step:1, suffix:"%" },
     { label:"其他费用率", key:"expenseRate", step:1, suffix:"%" },
     { label:"渠道佣金", key:"commission", step:1, suffix:"%" },
@@ -363,7 +397,33 @@ function renderParams() {
 
 function updateParam(key, val) {
   state[key] = parseFloat(val) || 0;
-  render();
+  markStale();
+}
+
+function markStale() {
+  state.dirty = true;
+  const out = document.getElementById("outputArea");
+  if (out.style.display !== "none") out.classList.add("stale");
+  document.getElementById("confirmBtn").classList.add("changed");
+}
+
+function confirmCalc() {
+  state.dirty = false;
+  const out = document.getElementById("outputArea");
+  out.style.display = "block";
+  out.classList.remove("stale");
+  document.getElementById("confirmBtn").classList.remove("changed");
+  renderOutput();
+  out.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function renderOutput() {
+  const r = compute();
+  renderCostRate(r);
+  renderGauges(r);
+  renderMetrics(r);
+  renderYearTable(r);
+  if (state.showMonthly) renderMonthlyDetail(r);
 }
 
 function renderCostRate(r) {
@@ -380,12 +440,12 @@ function renderBarChart() {
 function toggleRetention() {
   state.showRetention = !state.showRetention;
   document.getElementById("btnToggleRet").classList.toggle("active", state.showRetention);
-  document.getElementById("btnToggleRet").textContent = state.showRetention ? "收起" : "自定义";
+  document.getElementById("btnToggleRet").innerHTML = state.showRetention ? "📊 收起编辑" : "✏️ 自定义留存率";
   render();
 }
 
 function resetRetention() {
-  state.retention = [...DEFAULT_RETENTION]; render();
+  state.retention = [...DEFAULT_RETENTION]; markStale(); render();
 }
 
 function renderRetentionEditor() {
@@ -427,12 +487,12 @@ function setEditMode(mode) { state.editMode = mode; render(); }
 function updatePhase(start, end, val) {
   const v = parseInt(val) / 100;
   for (let i = start; i <= end; i++) state.retention[i] = v;
-  render();
+  markStale(); render();
 }
 
 function updateMonth(idx, val) {
   state.retention[idx] = parseInt(val) / 100;
-  render();
+  markStale(); render();
 }
 
 function renderGauges(r) {
@@ -473,7 +533,7 @@ function renderMetrics(r) {
     <div class="metric">
       <div class="m-label">ROI=80% 成本上限</div>
       <div class="m-value mono" style="color:#4fc3f7">${yuan(r.be80)}</div>
-      <div class="m-sub">近于平衡线</div>
+      <div class="m-sub">盈亏平衡线</div>
     </div>`;
 }
 
@@ -531,14 +591,14 @@ function renderMonthlyDetail(r) {
     <div class="detail-wrap">
       <table class="detail-table">
         <thead><tr>
-          <th style="text-align:left">月份</th><th>月存活率</th><th>累计存活率</th><th>当月保费</th><th>累计保费</th>
+          <th style="text-align:left">月份</th><th>月留存率</th><th>累计留存率</th><th>当月保费</th><th>累计保费</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>`;
 }
 
-// -- Init --
+// ── Init ──
 render();
 </script>
 </body>
