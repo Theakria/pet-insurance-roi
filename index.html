@@ -188,9 +188,9 @@ body {
 <div class="container" id="app">
   <!-- Header -->
   <div class="header">
-    <div class="header-icon">📊</div>
+    <div class="header-icon">🐾</div>
     <div>
-      <h1>短险投放ROI测算小工具</h1>
+      <h1>宠物险投放ROI测算小工具</h1>
       <p>3年用户全生命周期模型 · 实时计算</p>
     </div>
   </div>
@@ -212,16 +212,16 @@ body {
   <!-- Retention -->
   <div class="card">
     <div class="retention-header">
-      <div class="card-title" style="margin-bottom:0">留存率曲线（M0-M35）</div>
+      <div class="card-title" style="margin-bottom:0">存活率曲线（M0-M35）</div>
     </div>
     <div style="font-size:12px;color:#6a8caa;margin-bottom:10px;line-height:1.6">
-      默认采用标准留存模型：转商50% → 逐月爬升至98% → 续保年首月衰减后恢复。
-      <span style="color:#4fc3f7;cursor:pointer;border-bottom:1px dashed #4fc3f7" onclick="if(!state.showRetention)toggleRetention()">点击下方按钮可自定义调整 ↓</span>
+      默认采用标准存活模型：转化50% → 磨合期跌至98% → 续保年首月衰减后恢复。
+      <span style="color:#4fc3f7;cursor:pointer;border-bottom:1px dashed #4fc3f7" onclick="if(!state.showRetention)toggleRetention()">点击下方按钮可自定义调整 →</span>
     </div>
     <div class="bar-chart" id="barChart"></div>
-    <div class="bar-labels" style="margin-bottom:10px"><span>M0 转商</span><span>M11 首年末</span><span>M23 次年末</span><span>M35 三年末</span></div>
+    <div class="bar-labels" style="margin-bottom:10px"><span>M0 转化</span><span>M11 首年末</span><span>M23 次年末</span><span>M35 三年末</span></div>
     <div style="display:flex;gap:8px;justify-content:center">
-      <button class="small-btn" id="btnToggleRet" onclick="toggleRetention()" style="padding:8px 20px;font-size:12px;border-radius:8px">✏️ 自定义留存率</button>
+      <button class="small-btn" id="btnToggleRet" onclick="toggleRetention()" style="padding:8px 20px;font-size:12px;border-radius:8px">✏️ 自定义存活率</button>
       <button class="small-btn" id="btnReset" onclick="resetRetention()" style="padding:8px 16px;font-size:12px;border-radius:8px">↺ 恢复默认</button>
     </div>
     <div id="retentionEditor" style="display:none"></div>
@@ -244,7 +244,7 @@ body {
 
   <!-- Year Breakdown -->
   <div class="card">
-    <div class="card-title">年度明细</div>
+    <div class="card-title">年度摘要</div>
     <table class="data-table" id="yearTable"></table>
   </div>
 
@@ -252,14 +252,14 @@ body {
   <div class="card">
     <button class="collapse-btn" onclick="toggleMonthly()">
       <span class="card-title" style="margin-bottom:0">逐月明细（M0-M35）</span>
-      <span class="collapse-arrow" id="monthlyArrow">▾</span>
+      <span class="collapse-arrow" id="monthlyArrow">⾘</span>
     </button>
     <div id="monthlyDetail" style="display:none"></div>
   </div>
 
   </div><!-- /outputArea -->
 
-  <div class="footer">短险投放ROI测算小工具 · 基于3年用户全生命周期模型</div>
+  <div class="footer">宠物险投放ROI测算小工具 · 基于3年用户全生命周期模型</div>
 </div>
 
 <script>
@@ -271,8 +271,8 @@ const DEFAULT_RETENTION = [
 ];
 
 const PHASES = [
-  { label:"转商首月 M0", range:[0,0], color:"#e74c3c" },
-  { label:"首年爬坡 M1-M5", range:[1,5], color:"#e67e22" },
+  { label:"转化首月 M0", range:[0,0], color:"#e74c3c" },
+  { label:"首年磨合 M1-M5", range:[1,5], color:"#e67e22" },
   { label:"首年稳定 M6-M11", range:[6,11], color:"#f39c12" },
   { label:"续保Y1首月 M12", range:[12,12], color:"#27ae60" },
   { label:"续保Y1 M13-M23", range:[13,23], color:"#2ecc71" },
@@ -281,7 +281,7 @@ const PHASES = [
 ];
 
 const MONTH_LABELS = Array.from({length:36}, (_,i) => {
-  if(i===0) return "M0(转商)";
+  if(i===0) return "M0(转化)";
   if(i===11) return "M11(EOY1)";
   if(i===12) return "M12(续保Y1)";
   if(i===23) return "M23(EOY2)";
@@ -391,9 +391,9 @@ function renderPremiumLabel() {
 
 function renderParams() {
   const fields = [
-    { label:"单期保费", key:"premium", step:0.1, suffix:"元" },
+    { label:"月均保费", key:"premium", step:0.1, suffix:"元" },
     { label:"获客成本", key:"acqCost", step:5, suffix:"元" },
-    { label:"转商率", key:"convRate", step:1, suffix:"%" },
+    { label:"转化率", key:"convRate", step:1, suffix:"%" },
     { label:"赔付率", key:"lossRatio", step:1, suffix:"%" },
     { label:"其他费用率", key:"expenseRate", step:1, suffix:"%" },
     { label:"渠道佣金", key:"commission", step:1, suffix:"%" },
@@ -411,7 +411,7 @@ function renderParams() {
   let ycHtml = `<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">
     <span style="font-size:12px;color:#6a8caa">次年/第三年成本假设与首年${state.showYearCost ? '不同' : '一致'}</span>
     <button class="small-btn ${state.showYearCost?'active':''}" onclick="toggleYearCost()" style="padding:6px 14px;font-size:11px;border-radius:6px">
-      ${state.showYearCost ? '↩ 恢复与首年一致' : '⚙️ 分年调整'}
+      ${state.showYearCost ? '↩ 恢复与首年一致' : '✏️ 分年调整'}
     </button>
   </div>`;
 
@@ -544,7 +544,7 @@ function renderBarChart() {
 function toggleRetention() {
   state.showRetention = !state.showRetention;
   document.getElementById("btnToggleRet").classList.toggle("active", state.showRetention);
-  document.getElementById("btnToggleRet").innerHTML = state.showRetention ? "📊 收起编辑" : "✏️ 自定义留存率";
+  document.getElementById("btnToggleRet").innerHTML = state.showRetention ? "📐 收起编辑" : "✏️ 自定义存活率";
   render();
 }
 
@@ -591,14 +591,23 @@ function setEditMode(mode) { state.editMode = mode; render(); }
 function updatePhase(start, end, val) {
   const v = parseInt(val) / 100;
   for (let i = start; i <= end; i++) state.retention[i] = v;
-  if (start === 0) state.convRate = parseInt(val);
+  if (start === 0) {
+    state.convRate = parseInt(val);
+    // Sync the convRate input box directly
+    const inputs = document.getElementById("params").querySelectorAll('input[type="number"]');
+    if (inputs[2]) inputs[2].value = state.convRate; // 3rd input = convRate
+  }
   markStale();
   lightUpdate();
 }
 
 function updateMonth(idx, val) {
   state.retention[idx] = parseInt(val) / 100;
-  if (idx === 0) state.convRate = parseInt(val);
+  if (idx === 0) {
+    state.convRate = parseInt(val);
+    const inputs = document.getElementById("params").querySelectorAll('input[type="number"]');
+    if (inputs[2]) inputs[2].value = state.convRate;
+  }
   markStale();
   lightUpdate();
 }
@@ -641,7 +650,7 @@ function renderMetrics(r) {
     <div class="metric">
       <div class="m-label">ROI=80% 成本上限</div>
       <div class="m-value mono" style="color:#4fc3f7">${yuan(r.be80)}</div>
-      <div class="m-sub">盈亏平衡线</div>
+      <div class="m-sub">较优平衡线</div>
     </div>`;
 }
 
@@ -653,7 +662,7 @@ function renderYearTable(r) {
   ];
   document.getElementById("yearTable").innerHTML = `
     <thead><tr>
-      <th style="text-align:left"></th><th>保费实收</th><th>毛利率</th><th>毛利</th><th>累计毛利</th><th>累计ROI</th>
+      <th style="text-align:left"></th><th>保费收入</th><th>毛利率</th><th>毛利</th><th>累计毛利</th><th>累计ROI</th>
     </tr></thead>
     <tbody>${rows.map(([yr, p, mr, m, c, roi]) => `
       <tr>
@@ -700,7 +709,7 @@ function renderMonthlyDetail(r) {
     <div class="detail-wrap">
       <table class="detail-table">
         <thead><tr>
-          <th style="text-align:left">月份</th><th>月留存率</th><th>累计留存率</th><th>当月保费</th><th>累计保费</th>
+          <th style="text-align:left">月份</th><th>月存活率</th><th>累计存活率</th><th>当月保费</th><th>累计保费</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
