@@ -35,16 +35,6 @@ body {
 }
 .card-title { font-size: 14px; font-weight: 600; color: #4fc3f7; margin-bottom: 14px; }
 
-/* Preset buttons */
-.presets { display: flex; gap: 8px; margin-bottom: 16px; }
-.preset-btn {
-  padding: 8px 16px; border-radius: 8px; border: 1px solid #1e3a5f; cursor: pointer;
-  background: #0d1b2a; color: #6a8caa; font-size: 13px; font-weight: 500;
-  font-family: inherit; transition: all 0.2s;
-}
-.preset-btn.active { background: linear-gradient(135deg, #1a3a5f, #1e4a6f); color: #4fc3f7; }
-.preset-btn:hover { border-color: #4fc3f7; }
-
 /* Input grid */
 .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
 .input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
@@ -204,8 +194,8 @@ body {
     </div>
   </div>
 
-  <!-- Presets -->
-  <div class="presets" id="presets"></div>
+  <!-- Premium Label -->
+  <div id="premiumLabel"></div>
 
   <!-- Core Params -->
   <div class="card">
@@ -299,11 +289,6 @@ const MONTH_LABELS = Array.from({length:36}, (_,i) => {
   return `M${i}`;
 });
 
-const PRESETS = [
-  { label:"升级版 ¥78.9", premium:78.9, cost:140 },
-  { label:"基础版 ¥45.1", premium:45.1, cost:85 },
-];
-
 let state = {
   premium: 78.9, acqCost: 140, convRate: 50, lossRatio: 60, expenseRate: 4, commission: 3,
   // Y2/Y3 cost overrides — null means follow Y1
@@ -363,7 +348,7 @@ function getPhase(i) { return PHASES.find(p => i >= p.range[0] && i <= p.range[1
 
 // ── Render ──
 function render() {
-  renderPresets();
+  renderPremiumLabel();
   renderParams();
   renderBarChart();
   renderRetentionEditor();
@@ -376,15 +361,12 @@ function render() {
   }
 }
 
-function renderPresets() {
-  const el = document.getElementById("presets");
-  el.innerHTML = PRESETS.map(p =>
-    `<button class="preset-btn ${state.premium===p.premium?'active':''}" onclick="applyPreset(${p.premium},${p.cost})">${p.label}</button>`
-  ).join("");
-}
-
-function applyPreset(prem, cost) {
-  state.premium = prem; state.acqCost = cost; markStale(); render();
+function renderPremiumLabel() {
+  document.getElementById("premiumLabel").innerHTML = `
+    <div style="display:inline-block;padding:8px 18px;border-radius:8px;background:linear-gradient(135deg,#1a3a5f,#1e4a6f);
+      border:1px solid #1e3a5f;font-size:14px;font-weight:600;color:#4fc3f7;margin-bottom:16px">
+      保费 ${state.premium}元/月
+    </div>`;
 }
 
 function renderParams() {
@@ -465,6 +447,7 @@ function updateParam(key, val) {
     if (key === 'expenseRate') { state.y2Exp = null; state.y3Exp = null; }
     if (key === 'commission') { state.y2Comm = null; state.y3Comm = null; }
   }
+  if (key === 'premium') renderPremiumLabel();
   markStale();
 }
 
