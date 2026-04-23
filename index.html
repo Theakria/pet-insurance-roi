@@ -77,7 +77,8 @@ body {
 .phase-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .phase-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
 .phase-label { font-size: 12px; color: #8a9bb5; width: 140px; }
-.phase-row input[type="range"] { flex: 1; accent-color: var(--phase-color, #3498db); height: 4px; }
+.phase-row input[type="range"] { flex: 1; accent-color: var(--phase-color, #3498db); height: 4px; cursor: pointer; }
+.phase-row input[type="range"]:active { cursor: grabbing; }
 .phase-value { font-size: 12px; font-weight: 700; width: 44px; text-align: right; }
 
 /* Monthly editor */
@@ -313,6 +314,8 @@ function compute() {
   const mr3 = 1 - y3L - y3E - y3C;
 
   let cumRet = conv;
+  // Keep M0 in retention array synced with convRate
+  retention[0] = conv;
   const monthly = [];
   for (let m = 0; m < 36; m++) {
     if (m === 0) cumRet = conv; else cumRet *= retention[m];
@@ -347,17 +350,34 @@ function roiColor(v) {
 function getPhase(i) { return PHASES.find(p => i >= p.range[0] && i <= p.range[1]); }
 
 // ── Render ──
+let _paramsRendered = false;
+
 function render() {
   renderPremiumLabel();
   renderParams();
   renderBarChart();
   renderRetentionEditor();
-  // Cost rate display is in input area, update live
   const r = compute();
   renderCostRate(r);
-  // Output only renders on confirm
   if (!state.dirty && document.getElementById("outputArea").style.display !== "none") {
     renderOutput();
+  }
+}
+
+// Lightweight update — only touches values, never rebuilds DOM structure
+function lightUpdate() {
+  renderPremiumLabel();
+  renderBarChart();
+  const r = compute();
+  renderCostRate(r);
+  // Update phase values if visible
+  if (state.showRetention && state.editMode === 'phase') {
+    PHASES.forEach((p, pi) => {
+      const valEl = document.getElementById('phaseVal' + pi);
+      const rangeEl = document.getElementById('phaseRange' + pi);
+      if (valEl) valEl.textContent = pct(state.retention[p.range[0]]);
+      if (rangeEl) rangeEl.value = Math.round(state.retention[p.range[0]] * 100);
+    });
   }
 }
 
@@ -441,14 +461,14 @@ function renderParams() {
 
 function updateParam(key, val) {
   state[key] = parseFloat(val) || 0;
-  // If Y1 cost changed and Y2/Y3 are following Y1, keep them in sync
+  if (key === 'convRate') state.retention[0] = state.convRate / 100;
   if (['lossRatio','expenseRate','commission'].includes(key) && !state.showYearCost) {
     if (key === 'lossRatio') { state.y2Loss = null; state.y3Loss = null; }
     if (key === 'expenseRate') { state.y2Exp = null; state.y3Exp = null; }
     if (key === 'commission') { state.y2Comm = null; state.y3Comm = null; }
   }
-  if (key === 'premium') renderPremiumLabel();
   markStale();
+  lightUpdate();
 }
 
 function toggleYearCost() {
@@ -465,7 +485,7 @@ function toggleYearCost() {
 function updateYearParam(key, val) {
   state[key] = parseFloat(val) || 0;
   markStale();
-  render();
+  lightUpdate();
 }
 
 function markStale() {
@@ -504,10 +524,21 @@ function renderCostRate(r) {
 }
 
 function renderBarChart() {
-  document.getElementById("barChart").innerHTML = state.retention.map((v, i) => {
-    const phase = getPhase(i);
-    return `<div class="bar" style="height:${v*100}%;background:${phase?.color||'#3498db'}cc" title="M${i}: ${pct(v)}"></div>`;
-  }).join("");
+  const container = document.getElementById("barChart");
+  const bars = container.children;
+  if (bars.length === 36) {
+    // Update in-place for smooth transitions
+    state.retention.forEach((v, i) => {
+      bars[i].style.height = `${v * 100}%`;
+      bars[i].title = `M${i}: ${pct(v)}`;
+    });
+  } else {
+    // First render
+    container.innerHTML = state.retention.map((v, i) => {
+      const phase = getPhase(i);
+      return `<div class="bar" style="height:${v*100}%;background:${phase?.color||'#3498db'}cc" title="M${i}: ${pct(v)}"></div>`;
+    }).join("");
+  }
 }
 
 function toggleRetention() {
@@ -536,9 +567,9 @@ function renderRetentionEditor() {
       `<div class="phase-row">
         <div class="phase-dot" style="background:${p.color}"></div>
         <span class="phase-label">${p.label}</span>
-        <input type="range" min="0" max="100" value="${Math.round(state.retention[p.range[0]]*100)}"
+        <input type="range" id="phaseRange${pi}" min="0" max="100" value="${Math.round(state.retention[p.range[0]]*100)}"
           style="--phase-color:${p.color}" oninput="updatePhase(${p.range[0]},${p.range[1]},this.value)">
-        <span class="phase-value mono" style="color:${p.color}">${pct(state.retention[p.range[0]])}</span>
+        <span class="phase-value mono" id="phaseVal${pi}" style="color:${p.color}">${pct(state.retention[p.range[0]])}</span>
       </div>`
     ).join("");
   } else {
@@ -560,12 +591,16 @@ function setEditMode(mode) { state.editMode = mode; render(); }
 function updatePhase(start, end, val) {
   const v = parseInt(val) / 100;
   for (let i = start; i <= end; i++) state.retention[i] = v;
-  markStale(); render();
+  if (start === 0) state.convRate = parseInt(val);
+  markStale();
+  lightUpdate();
 }
 
 function updateMonth(idx, val) {
   state.retention[idx] = parseInt(val) / 100;
-  markStale(); render();
+  if (idx === 0) state.convRate = parseInt(val);
+  markStale();
+  lightUpdate();
 }
 
 function renderGauges(r) {
