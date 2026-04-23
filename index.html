@@ -211,6 +211,7 @@ body {
   <div class="card">
     <div class="card-title">核心参数</div>
     <div class="input-grid" id="params"></div>
+    <div id="yearCostArea"></div>
     <div class="summary-bar">
       <span class="label">综合成本率 / 毛利率</span>
       <span class="value mono" id="costRateDisplay"></span>
@@ -305,6 +306,10 @@ const PRESETS = [
 
 let state = {
   premium: 78.9, acqCost: 140, convRate: 50, lossRatio: 60, expenseRate: 4, commission: 3,
+  // Y2/Y3 cost overrides — null means follow Y1
+  y2Loss: null, y2Exp: null, y2Comm: null,
+  y3Loss: null, y3Exp: null, y3Comm: null,
+  showYearCost: false,
   retention: [...DEFAULT_RETENTION],
   showRetention: false, showMonthly: false, editMode: "phase",
 };
@@ -313,10 +318,14 @@ let state = {
 function compute() {
   const { premium, acqCost, retention } = state;
   const conv = state.convRate / 100;
-  const loss = state.lossRatio / 100;
-  const exp = state.expenseRate / 100;
-  const comm = state.commission / 100;
-  const marginRate = 1 - loss - exp - comm;
+
+  // Per-year cost assumptions (Y2/Y3 fall back to Y1 if null)
+  const y1L = state.lossRatio / 100, y1E = state.expenseRate / 100, y1C = state.commission / 100;
+  const y2L = (state.y2Loss ?? state.lossRatio) / 100, y2E = (state.y2Exp ?? state.expenseRate) / 100, y2C = (state.y2Comm ?? state.commission) / 100;
+  const y3L = (state.y3Loss ?? state.lossRatio) / 100, y3E = (state.y3Exp ?? state.expenseRate) / 100, y3C = (state.y3Comm ?? state.commission) / 100;
+  const mr1 = 1 - y1L - y1E - y1C;
+  const mr2 = 1 - y2L - y2E - y2C;
+  const mr3 = 1 - y3L - y3E - y3C;
 
   let cumRet = conv;
   const monthly = [];
@@ -327,12 +336,14 @@ function compute() {
 
   const sum = (a, b) => monthly.slice(a, b).reduce((s, r) => s + r.prem, 0);
   const y1P = sum(0,12), y2P = sum(12,24), y3P = sum(24,36);
-  const y1M = y1P * marginRate, y2M = y2P * marginRate, y3M = y3P * marginRate;
+  const y1M = y1P * mr1, y2M = y2P * mr2, y3M = y3P * mr3;
   const c1 = y1M, c2 = c1 + y2M, c3 = c2 + y3M;
   const cost = acqCost || 1;
 
   return {
-    monthly, marginRate, costRate: loss + exp + comm,
+    monthly,
+    mr1, mr2, mr3,
+    cr1: y1L+y1E+y1C, cr2: y2L+y2E+y2C, cr3: y3L+y3E+y3C,
     y1P, y2P, y3P, y1M, y2M, y3M, c1, c2, c3,
     roi1: c1/cost, roi2: c2/cost, roi3: c3/cost,
     be80: c3/0.8, be100: c3/1.0,
@@ -393,11 +404,85 @@ function renderParams() {
       <span class="suffix">${f.suffix}</span>
     </div>`
   ).join("");
+
+  // Per-year cost section
+  let ycHtml = `<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between">
+    <span style="font-size:12px;color:#6a8caa">次年/第三年成本假设与首年${state.showYearCost ? '不同' : '一致'}</span>
+    <button class="small-btn ${state.showYearCost?'active':''}" onclick="toggleYearCost()" style="padding:6px 14px;font-size:11px;border-radius:6px">
+      ${state.showYearCost ? '↩ 恢复与首年一致' : '⚙️ 分年调整'}
+    </button>
+  </div>`;
+
+  if (state.showYearCost) {
+    const yrFields = [
+      { yr:"Y2 次年", lKey:"y2Loss", eKey:"y2Exp", cKey:"y2Comm" },
+      { yr:"Y3 第三年", lKey:"y3Loss", eKey:"y3Exp", cKey:"y3Comm" },
+    ];
+    ycHtml += `<div style="margin-top:12px;padding:12px;background:#0a1520;border-radius:10px">`;
+    for (const yf of yrFields) {
+      const lv = state[yf.lKey] ?? state.lossRatio;
+      const ev = state[yf.eKey] ?? state.expenseRate;
+      const cv = state[yf.cKey] ?? state.commission;
+      const mr = 1 - lv/100 - ev/100 - cv/100;
+      ycHtml += `
+        <div style="margin-bottom:10px">
+          <div style="font-size:12px;font-weight:600;color:#4fc3f7;margin-bottom:6px">${yf.yr}
+            <span style="font-weight:400;color:#4a6a8a;margin-left:8px">毛利率 ${pct(mr)}</span>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <div class="input-row" style="margin-bottom:0">
+              <label style="min-width:50px;font-size:11px">赔付率</label>
+              <input type="number" value="${lv}" step="1" min="0" style="width:54px;padding:4px 6px;font-size:11px"
+                oninput="updateYearParam('${yf.lKey}', this.value)" class="mono">
+              <span class="suffix">%</span>
+            </div>
+            <div class="input-row" style="margin-bottom:0">
+              <label style="min-width:50px;font-size:11px">费用率</label>
+              <input type="number" value="${ev}" step="1" min="0" style="width:54px;padding:4px 6px;font-size:11px"
+                oninput="updateYearParam('${yf.eKey}', this.value)" class="mono">
+              <span class="suffix">%</span>
+            </div>
+            <div class="input-row" style="margin-bottom:0">
+              <label style="min-width:50px;font-size:11px">佣金</label>
+              <input type="number" value="${cv}" step="1" min="0" style="width:54px;padding:4px 6px;font-size:11px"
+                oninput="updateYearParam('${yf.cKey}', this.value)" class="mono">
+              <span class="suffix">%</span>
+            </div>
+          </div>
+        </div>`;
+    }
+    ycHtml += `</div>`;
+  }
+
+  document.getElementById("yearCostArea").innerHTML = ycHtml;
 }
 
 function updateParam(key, val) {
   state[key] = parseFloat(val) || 0;
+  // If Y1 cost changed and Y2/Y3 are following Y1, keep them in sync
+  if (['lossRatio','expenseRate','commission'].includes(key) && !state.showYearCost) {
+    if (key === 'lossRatio') { state.y2Loss = null; state.y3Loss = null; }
+    if (key === 'expenseRate') { state.y2Exp = null; state.y3Exp = null; }
+    if (key === 'commission') { state.y2Comm = null; state.y3Comm = null; }
+  }
   markStale();
+}
+
+function toggleYearCost() {
+  state.showYearCost = !state.showYearCost;
+  if (!state.showYearCost) {
+    // Reset Y2/Y3 to follow Y1
+    state.y2Loss = null; state.y2Exp = null; state.y2Comm = null;
+    state.y3Loss = null; state.y3Exp = null; state.y3Comm = null;
+  }
+  markStale();
+  render();
+}
+
+function updateYearParam(key, val) {
+  state[key] = parseFloat(val) || 0;
+  markStale();
+  render();
 }
 
 function markStale() {
@@ -427,7 +512,12 @@ function renderOutput() {
 }
 
 function renderCostRate(r) {
-  document.getElementById("costRateDisplay").textContent = `${pct(r.costRate)} / ${pct(r.marginRate)}`;
+  if (state.showYearCost) {
+    document.getElementById("costRateDisplay").innerHTML =
+      `Y1 ${pct(r.cr1)}/${pct(r.mr1)} · Y2 ${pct(r.cr2)}/${pct(r.mr2)} · Y3 ${pct(r.cr3)}/${pct(r.mr3)}`;
+  } else {
+    document.getElementById("costRateDisplay").textContent = `${pct(r.cr1)} / ${pct(r.mr1)}`;
+  }
 }
 
 function renderBarChart() {
@@ -539,18 +629,19 @@ function renderMetrics(r) {
 
 function renderYearTable(r) {
   const rows = [
-    ["Y1", r.y1P, r.y1M, r.c1, r.roi1],
-    ["Y2", r.y2P, r.y2M, r.c2, r.roi2],
-    ["Y3", r.y3P, r.y3M, r.c3, r.roi3],
+    ["Y1", r.y1P, r.mr1, r.y1M, r.c1, r.roi1],
+    ["Y2", r.y2P, r.mr2, r.y2M, r.c2, r.roi2],
+    ["Y3", r.y3P, r.mr3, r.y3M, r.c3, r.roi3],
   ];
   document.getElementById("yearTable").innerHTML = `
     <thead><tr>
-      <th style="text-align:left"></th><th>保费实收</th><th>毛利</th><th>累计毛利</th><th>累计ROI</th>
+      <th style="text-align:left"></th><th>保费实收</th><th>毛利率</th><th>毛利</th><th>累计毛利</th><th>累计ROI</th>
     </tr></thead>
-    <tbody>${rows.map(([yr, p, m, c, roi]) => `
+    <tbody>${rows.map(([yr, p, mr, m, c, roi]) => `
       <tr>
         <td>${yr}</td>
         <td class="mono">${yuan(p)}</td>
+        <td class="mono" style="color:#6a8caa">${pct(mr)}</td>
         <td class="mono">${yuan(m)}</td>
         <td class="mono" style="font-weight:700">${yuan(c)}</td>
         <td class="mono" style="font-weight:700;color:${roiColor(roi)}">${pct(roi)}</td>
