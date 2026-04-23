@@ -370,14 +370,20 @@ function lightUpdate() {
   renderBarChart();
   const r = compute();
   renderCostRate(r);
-  // Update phase values if visible
-  if (state.showRetention && state.editMode === 'phase') {
-    PHASES.forEach((p, pi) => {
-      const valEl = document.getElementById('phaseVal' + pi);
-      const rangeEl = document.getElementById('phaseRange' + pi);
-      if (valEl) valEl.textContent = pct(state.retention[p.range[0]]);
-      if (rangeEl) rangeEl.value = Math.round(state.retention[p.range[0]] * 100);
-    });
+  // Update retention editor if visible
+  if (state.showRetention) {
+    if (state.editMode === 'phase') {
+      PHASES.forEach((p, pi) => {
+        const valEl = document.getElementById('phaseVal' + pi);
+        const rangeEl = document.getElementById('phaseRange' + pi);
+        if (valEl) valEl.textContent = pct(state.retention[p.range[0]]);
+        if (rangeEl) rangeEl.value = Math.round(state.retention[p.range[0]] * 100);
+      });
+    } else {
+      // monthly mode: sync M0 input box
+      const m0Input = document.querySelector('.monthly-grid .monthly-item input');
+      if (m0Input) m0Input.value = Math.round(state.retention[0] * 100);
+    }
   }
 }
 
